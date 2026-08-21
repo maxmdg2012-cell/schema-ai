@@ -6,10 +6,20 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { rawSchedule } = req.body;
-  const apiKey = process.env.Schedule_API;
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+    const { rawSchedule } = body;
+    const apiKey = process.env.Schedule_API;
 
-  const promptText = `You are a schedule organizer. Take this messy text and convert it into a clean JSON array of objects.
+    if (!rawSchedule) {
+      return res.status(400).json({ error: 'Ingen schematext skickades' });
+    }
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'API-nyckel saknas i Vercel' });
+    }
+
+    const promptText = `You are a schedule organizer. Take this messy text and convert it into a clean JSON array of objects.
 
 Strict rules:
 1. LANGUAGE: Automatically detect the language of the input text. Write the output (day names, activities, locations) in that EXACT same language (e.g. Swedish if the input is Swedish).
@@ -20,7 +30,6 @@ Strict rules:
 Text:
 ${rawSchedule}`;
 
-  try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -28,7 +37,7 @@ ${rawSchedule}`;
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant', // HÄR ÄR DEN NYA BLIXTSNABBA MODELLEN
         messages: [{ role: 'user', content: promptText }],
         temperature: 0.1
       })
