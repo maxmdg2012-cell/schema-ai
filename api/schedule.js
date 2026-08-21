@@ -1,66 +1,54 @@
-<!DOCTYPE html>
-<html lang="sv">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Schema Organisatör</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f4f4f9; color: #333; }
-    textarea { width: 100%; height: 120px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; }
-    button { background: #10b981; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; font-size: 16px; }
-    button:hover { background: #059669; }
-    .schedule-list { margin-top: 25px; display: flex; flex-direction: column; gap: 10px; }
-    .card { background: white; padding: 15px; border-radius: 8px; border-left: 5px solid #10b981; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
-    .day-time { display: flex; flex-direction: column; font-size: 0.9em; color: #666; width: 120px; }
-    .day { font-weight: bold; color: #111; }
-    .details { font-weight: 600; text-align: right; }
-    .location { font-size: 0.85em; color: #888; font-weight: normal; }
-  </style>
-</head>
-<body>
+export default async function handler(req, res) {
+  // Tillåt cross-origin anrop från t.ex. Neocities
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  <h2>Klistra in ditt röriga schema</h2>
-  <textarea id="input" placeholder="T.ex: Mån matte 08:00 i sal 10, sen engelska 10:00. Tisdag idrott kl 13:00..."></textarea>
-  <button onclick="fixSchedule()">Snygga till schemat</button>
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  <div id="output" class="schedule-list"></div>
+  const { rawSchedule } = req.body;
+  const apiKey = process.env.Schedule_API; // Läser in din Groq-nyckel från Vercel
 
-  <script>
-    async function fixSchedule() {
-      const text = document.getElementById('input').value;
-      const output = document.getElementById('output');
-      if(!text) return;
+  const promptText = `You are a schedule organizer. Take this messy text and convert it into a clean JSON array of objects.
 
-      output.innerHTML = "<p>Sorterar och städar...</p>";
+Strict rules:
+1. LANGUAGE: Automatically detect the language of the input text. Write the output (day names, activities, locations) in that EXACT same language (e.g. Swedish if the input is Swedish).
+2. STRUCTURE: Each object must strictly have these keys: "day", "time", "activity", "location".
+3. MISSING DATA: If a field is missing, use "N/A".
+4. OUTPUT: Respond ONLY with a valid raw JSON array, without markdown blocks or conversational text.
 
-      try {
-        const res = await fetch('/api/schedule', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rawSchedule: text })
-        });
+Text:
+${rawSchedule}`;
 
-        const data = await res.json();
-        output.innerHTML = "";
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: promptText }],
+        temperature: 0.1
+      })
+    });
 
-        data.schedule.forEach(item => {
-          output.innerHTML += `
-            <div class="card">
-              <div class="day-time">
-                <span class="day">${item.day}</span>
-                <span>${item.time}</span>
-              </div>
-              <div class="details">
-                <div>${item.activity}</div>
-                <div class="location">${item.location !== 'N/A' ? item.location : ''}</div>
-              </div>
-            </div>
-          `;
-        });
-      } catch (err) {
-        output.innerHTML = "<p>Något gick fel, provar igen!</p>";
-      }
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Groq API error:", data);
+      return res.status(response.status).json({ error: 'Error from AI provider' });
     }
-  </script>
-</body>
-</html>
+
+    let rawJson = data.choices[0].message.content;
+    rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsedSchedule = JSON.parse(rawJson);
+
+    return res.status(200).json({ schedule: parsedSchedule });
+  } catch (error) {
+    console.error("Backend error:", error);
+    return res.status(500).json({ error: 'Kunde inte tolka schemat' });
+  }
+}
