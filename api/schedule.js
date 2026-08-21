@@ -25,7 +25,7 @@ module.exports = async function handler(req, res) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant', 
+        model: 'llama-3.3-70b-versatile', 
         messages: [{ 
           role: 'user', 
           content: `You are a schedule organizer. Take this messy text and convert it into a clean JSON array of objects. Strict rules: 1. LANGUAGE: Same as input. 2. STRUCTURE: keys: "day", "time", "activity", "location". 3. MISSING DATA: Use "N/A". 4. OUTPUT: raw JSON array only. Text: ${rawSchedule}`
