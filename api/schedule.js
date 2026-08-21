@@ -4,7 +4,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  
+
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const { rawSchedule } = body;
@@ -25,7 +25,7 @@ module.exports = async function handler(req, res) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'llama3-8b-8192', 
+        model: 'llama-3.1-8b-instant', 
         messages: [{ 
           role: 'user', 
           content: `You are a schedule organizer. Take this messy text and convert it into a clean JSON array of objects. Strict rules: 1. LANGUAGE: Same as input. 2. STRUCTURE: keys: "day", "time", "activity", "location". 3. MISSING DATA: Use "N/A". 4. OUTPUT: raw JSON array only. Text: ${rawSchedule}`
@@ -36,7 +36,6 @@ module.exports = async function handler(req, res) {
 
     const data = await response.json();
 
-    // HÄR ÄR MAGIN: Nu fångar vi exakt vad Groq gnäller på och skickar det till dig
     if (!response.ok) {
       const errorMessage = data.error?.message || JSON.stringify(data);
       return res.status(500).json({ error: `Groq AI Fel (${response.status}): ${errorMessage}` });
